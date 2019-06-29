@@ -2,63 +2,61 @@ package main
 
 import (
 	"net/http"
+	"os"
 	"strconv"
 
-	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 )
 
-type Joke struct {
-	ID    int    `json:"id" binding:"required"`
-	Likes int    `json:"like"`
-	Joke  string `json:"joke" binding:"required"`
-}
+func main() {
+	port := os.Getenv("PORT")
 
-var jokes = []Joke{
-	Joke{1, 0, "Joke1"},
-	Joke{2, 0, "Joke2"},
-	Joke{3, 0, "Joke3"},
-	Joke{4, 0, "Joke4"},
-	Joke{5, 0, "Joke5"},
-	Joke{6, 0, "Joke6"},
-	Joke{7, 0, "Joke7"},
-}
+	if port == "" {
+		port = "3000"
+	}
 
-func JokeHandler(c *gin.Context) {
-	c.Header("Content-Type", "application/json")
-	c.JSON(http.StatusOK, jokes)
-}
+	router := gin.New()
+	router.Use(gin.Logger())
+	router.LoadHTMLGlob("templates/*.tmpl.html")
+	router.Static("/static", "static")
 
-func LikeJoke(c *gin.Context) {
-	if jokeid, err := strconv.Atoi(c.Param("jokeID")); err == nil {
-		for i := 0; i < len(jokes); i++ {
-			if jokes[i].ID == jokeid {
-				jokes[i].Likes += 1
+	router.GET("/", func(c *gin.Context) {
+		n := c.Query("n")
+		if n == "" {
+			// render view
+			c.HTML(http.StatusOK, "index.tmpl.html", nil)
+		} else {
+			i, err := strconv.Atoi(n)
+			if err != nil || i < 1 || i > 10000 {
+				// render error
+				c.HTML(http.StatusOK, "index.tmpl.html", gin.H{
+					"error": "Please submit a valid number between 1 and 10000.",
+				})
+			} else {
+				p := calculatePrime(i)
+				// rende prime
+				c.HTML(http.StatusOK, "index.tmpl.html", gin.H{"n": i, "prime": p})
 			}
 		}
+	})
 
-		c.JSON(http.StatusOK, &jokes)
-	} else {
-		c.AbortWithStatus(http.StatusNotFound)
-	}
+	router.Run(":" + port)
 }
 
-func main() {
-	router := gin.Default()
-
-	router.Use(static.Serve("/", static.LocalFile("./views", true)))
-
-	api := router.Group("api")
-	{
-		api.GET("/", func(c *gin.Context) {
-			c.JSON(http.StatusOK, gin.H{
-				"message": "pong",
-			})
-		})
+func calculatePrime(n int) int {
+	prime := 1
+	for i := n; i > 1; i-- {
+		isPrime := true
+		for j := 2; j < i; j++ {
+			if i%j == 0 {
+				isPrime = false
+				break
+			}
+		}
+		if isPrime {
+			prime = i
+			break
+		}
 	}
-
-	api.GET("/jokes", JokeHandler)
-	api.POST("/jokes/like/:jokeID", LikeJoke)
-
-	router.Run(":3000")
+	return prime
 }
